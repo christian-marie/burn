@@ -153,7 +153,7 @@ can be thought of as a surrounding box of constant pixels.
 
 > bound :: (V2 Int, V2 Int) -> a -> (Store (V2 Int) a -> a ) -> Store (V2 Int) a -> a    
 > bound (V2 bx by, V2 tx ty) def f s@(pos -> V2 x y)
->   | x < bx || y < by || x > tx || x > ty = def
+>   | x < bx || y < by || x > tx || y > ty = def
 >   | otherwise = f s
 >
 
