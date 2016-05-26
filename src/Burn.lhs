@@ -1,21 +1,21 @@
 We will now build a very simple model for wildfire propagation. So simple in
-fact, that we don't need to concern with its correctness. It's not.
+fact, that we don't need to concern ourselves with its correctness. It's not
+correct.
 
-In order to keep this model computationally feasible, we will break the world
-up into a 2 dimensional discrete grid. We will then model the computation as an
+In the model of our world will be a two dimensional grid made up of discrete
+cells with their own local state. We will then model the computation as an
 evolution rule, defined once for all grid cells. This rule may request the
 state of any cell in the previous generation.
 
 To keep this challenging, we require that the grid be infinitely large,
 requiring the user to explicitly state the bounds of their computation, at
 which point the evolution rule will have to stop asking about other cells in
-the universe to terminate the computation at a boundary. Without such a
-requirement, the number of grid cells to compute would exponentially grow as
-further generations ask about more and more cells. It's impossible to say what
-this growth factor would be without inspecting the evolution rule itself, as it
-will be free to request the state of any neighbouring cells from generation
-$n-1$, which will need to be lazily computed and may in turn request
-information from generation $n-2$, and so on.
+the at a particular boundary. Without such a requirement, the number of grid
+cells to compute would exponentially grow as further generations ask about more
+and more cells. It's impossible to say what this growth factor would be without
+inspecting the evolution rule itself, as it will be free to request the state
+of any neighbouring cells from generation $n-1$, which will need to be lazily
+computed and may in turn request information from generation $n-2$, and so on.
 
 To make such a computation feasible, we will require that the evolution rule
 for the system be pure, so that we can memoise generation n-1, and not have to
@@ -45,17 +45,23 @@ First, some imports.
 > import SDL.Cairo.Canvas (Canvas)
 
 Recall that the monad State s a is a function from initial state s to final
-value a and final state s $s -> (a,s)$. These functions can be composed
-together to form a chain of computations that can be used to model a program's
-state.
+value a and final state s.
+
+$s \to (a,s)$
+
+These functions can be composed together to form a chain of
+computations that can be used to model a program's state.
 
 If you flip some arrows around, this State monad becomes a Store Comonad.
 Observe that Store s a is some state s along with a function that computes an
-output based on that state: $(s -> a, s)$
+output based on that state.
 
-The Store is trivially a Functor, where fmap g (Store f s) = Store (g . f) s
-The Store is trivially a Comonad, were extract (Store f s) = f s, and duplicate
-(Store f s) = Store (Store f) s, an finally extend f = fmap f . duplicate.
+$((s \to a), s)$
+
+The Store is trivially a Functor, where $fmap\ g\ (Store\ f\ s) = Store\ (g\ .\ f)\ s$.
+
+The Store is trivially a Comonad, were extract $(Store\ f\ s) = f\ s$, and $duplicate\ 
+(Store f s) = Store\ (Store\ f)\ s$, an finally $extend f = fmap\ f\ .\ duplicate$.
 
 We can define our evolution rule as a store algebra, where the configuration is
 the coordinate that we are computing. This algebra returns a new pixel state,
