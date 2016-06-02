@@ -1,56 +1,36 @@
-We will now build a very simple model for wildfire propagation. So simple in
-fact, that we don't need to concern ourselves with its correctness. It's not
+We will now build a very simple model for wildfire propagation, so simple
+indeed that we don't need to concern ourselves with its correctness; it is not
 correct.
 
-In the model of our world will be a two dimensional grid made up of discrete
-cells with their own local state. We will then model the computation as an
-evolution rule, defined once for all grid cells. This rule may request the
-state of any cell in the previous generation.
+We will model our world as a two dimensional grid made up of discrete cells
+with their own local state. We will then model the computation as an evolution
+rule, defined once for all grid cells. This rule may request the state of any
+cell in the previous generation.
 
 To keep this challenging, we require that the grid be infinitely large,
-requiring the user to explicitly state the bounds of their computation, at
-which point the evolution rule will have to stop asking about other cells in
-the at a particular boundary. Without such a requirement, the number of grid
-cells to compute would exponentially grow as further generations ask about more
-and more cells. It's impossible to say what this growth factor would be without
-inspecting the evolution rule itself, as it will be free to request the state
-of any neighbouring cells from generation $n-1$, which will need to be lazily
-computed and may in turn request information from generation $n-2$, and so on.
+requiring the user to explicitly state the bounds of their computation. At
+the boundary of said computation the evolution rule will have to stop
+requesting information of adjacent cells. Without such a requirement, the
+number of grid cells to compute would exponentially grow as further generations
+ask about more and more cells. It's impossible to say what this growth factor
+would be without inspecting the evolution rule itself, as it will be free to
+request the state of any neighbouring cells from $generation_{n-1}$, which will
+need to be lazily computed and may in turn request information from
+$generation_{n-2}$, and so on.
 
 To make such a computation feasible, we will require that the evolution rule
-for the system be pure, so that we can memoise generation n-1, and not have to
-re-calculate every previous generation at every step.
+for the system at $generation_n$ be deterministic with respect to
+$generation_{n-1}$. This allows us to memoise previous generations, and not
+have to reconstruct the history of the universe at every step.
 
-The first question we need to answer is -- how will we model such a
-computation, where we have a rule that may require its own output at a previous
-generation. This happens to be a perfect use of the Store Comonad. Let us begin
-by defining our evolution rule.
-
-First, some imports.
-
-> {-# LANGUAGE ViewPatterns #-}
-> {-# LANGUAGE RecordWildCards #-}
-> {-# LANGUAGE OverloadedStrings #-}
-> module Main where
-
-> import Control.Comonad.Store
-> import Data.MemoCombinators as Memo
-> import Linear.V2
-> import Data.Maybe
-> import Data.Map(Map)
-> import qualified Data.Map as Map
-> import qualified SDL
-> import qualified SDL.Cairo as Cairo
-> import qualified SDL.Cairo.Canvas as Canvas
-> import SDL.Cairo.Canvas (Canvas)
+A computation where we have a rule that may require its own output at a
+previous generation happens to be a perfect use of the Store Comonad. I will
+now briefly introduce the Store Comonad.
 
 Recall that the monad State s a is a function from initial state s to final
 value a and final state s.
 
 $s \to (a,s)$
-
-These functions can be composed together to form a chain of
-computations that can be used to model a program's state.
 
 If you flip some arrows around, this State monad becomes a Store Comonad.
 Observe that Store s a is some state s along with a function that computes an
@@ -63,23 +43,44 @@ The Store is trivially a Functor, where $fmap\ g\ (Store\ f\ s) = Store\ (g\ .\ 
 The Store is trivially a Comonad, were extract $(Store\ f\ s) = f\ s$, and $duplicate\ 
 (Store f s) = Store\ (Store\ f)\ s$, an finally $extend f = fmap\ f\ .\ duplicate$.
 
-We can define our evolution rule as a store algebra, where the configuration is
-the coordinate that we are computing. This algebra returns a new pixel state,
-and is able to look at any of the previous generation's pixel states with the
-provided Store. A the output of rule is uniquely determined by the function
-within Store that goes in (generation n-1's rule, which *could* be an entirely
-different rule), and the coordinates represented as a 2D vector.
+With this structure introduced, we can begin.
 
-Our PixelState will be the instantaneous average: temperature, and fuel
+> {-# LANGUAGE RecordWildCards #-}
+> {-# LANGUAGE OverloadedStrings #-}
+> {-# LANGUAGE ViewPatterns #-}
+>
+> module Main where
+
+> import Control.Comonad.Store
+> import Data.MemoCombinators as Memo
+> import Linear.V2
+> import Data.Maybe
+> import Data.Map (Map)
+> import qualified Data.Map as Map
+> import qualified SDL
+> import qualified SDL.Cairo as Cairo
+> import qualified SDL.Cairo.Canvas as Canvas
+> import SDL.Cairo.Canvas (Canvas)
+
+We can define our evolution rule as a store algebra ($f\ a\ \to\ a$), where the
+store configuration is the coordinate that we are computing. This algebra
+returns a new pixel state and is able to look at any of the previous
+generation's pixel states with the provided Store. The output of said rule is
+uniquely determined by the function within the Store that it is parametrised by
+(generation n-1's rule, which *could* be an entirely different rule), and the
+coordinates represented as a 2D vector. In practice, we will feed the same rule
+into the simulation at all but the first generation.
+
+Our PixelState will be the instantaneous average temperature and fuel
 remaining.
 
 > data PixelState = PixelState { temp :: !Double
 >                              , fuel :: !Double }
 >   deriving Show
 
-The intuition here is that an algebra takes the entire lazily computed universe
-at a point in time, and computes the pixel for the next moment at a particular
-coordinate.
+The intuition for the evolution rule is that it takes the entire lazily
+computed universe at $generation_{n-1}$, and computes the state of a single pixel
+for the $generation_n$ at a particular coordinate.
 
 > burn :: Store (V2 Int) PixelState -> PixelState
 > burn s =
@@ -87,18 +88,17 @@ coordinate.
 To simulate the temperature of the fire, we will use very simple (broken) model
 of a constant flashpoint, heat output scaled by the logarithm of the fuel, and
 bound by a oxygen ceiling, heat loss proportional to the amount of heat, and
-heat transfer itself modelled by a "rolling", average, a sort of cellular blur
+heat transfer itself modelled by a "rolling" average, a sort of cellular blur
 filter.
+
+We are wherever the this store's coordinates points, at the previous generation.
 
 >     us { temp = new_temp
 >        , fuel = new_fuel}
 >   where
-
-We are wherever the this store's coordinates points, at the previous generation.
-
 >     us = extract s
 
-These are our eight neigbouring cells.
+These are our eight neighbouring cells.
 
 >     V2 px py = pos s
 >     them = [ peek (V2 (px + dx) (py + dy)) s
@@ -116,7 +116,8 @@ oxygen.
 We now need to incorporate this heat with our surrounding cells.
 
 >     ambient_temp = sum (fmap temp them) / fromIntegral (length them)
->     new_temp = max 0 $ our_temp + ((ambient_temp - our_temp) * heat_transfer) - heat_loss
+>     new_temp = max 0 $
+>       our_temp + ((ambient_temp - our_temp) * heat_transfer) - heat_loss
 
 Some magic numbers.
 
@@ -141,9 +142,9 @@ aside from entries in a seed map.
 >                           ]
 
 By passing gen0 to to the burn algebra, we can now compute a single pixel of
-the next generation. If we were to iterate this twice, then $gen_2$ would
-request the output of neighbouring pixels at $gen_1$, which would in turn look
-up its neighbouring pixels in $gen_0$. As this process is iterated, we can see
+the next generation. If we were to iterate this twice, then $generation_2$ would
+request the output of neighbouring pixels at $generation_1$, which would in turn look
+up its neighbouring pixels in $generation_0$. As this process is iterated, we can see
 how we only compute the pixels relevant to our computation, and on demand.
 
 This could get out of hand very quickly, and there is no point computing the
@@ -168,7 +169,7 @@ might be cleaner.
 >       from (V2 x y) = (x,y)
 >       memoPair = Memo.pair Memo.integral Memo.integral
 
-Now we define our simulation parametrised by a store algebra, and an initial
+Now we define our simulation as parametrised by a store algebra, and an initial
 store. We feed result of successive uniform applications the algebra over the
 entire universe back into itself. simulation alg base !! 10 will retrieve the
 tenth generation. Only this tenth generation store is peeked into will the
@@ -200,7 +201,7 @@ We create a lazy value, frames, which is a list of "windows" into our universe.
 >     let results = simulation (bound bounds emptyPixel burn) gen0
 >     let frames = fmap (computeWithin bounds) results 
 
-Now for the quick and nasty rendering of our simulation, we will render a cairo
+Now for the quick and nasty rendering of our simulation, we will render a Cairo
 texture within SDL. Get a window and show it.
 
 >     SDL.initialize [SDL.InitVideo]
@@ -211,7 +212,7 @@ Get a renderer to put our texture on.
 
 >     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer  { SDL.rendererType = SDL.SoftwareRenderer }
 
-Associate our cairo texture with the renderer.
+Associate our Cairo texture with the renderer.
 
 >     texture <- Cairo.createCairoTexture' renderer window
 >     loop renderer texture frames 
@@ -234,12 +235,12 @@ Swap the buffers.
 >         SDL.present renderer
 >         loop renderer texture frames 
 
-
 We represent each pixel by a circle, bigger and redder circles are hotter.
 
 >     drawPixel :: V2 Int -> PixelState -> Canvas ()
 >     drawPixel coords PixelState{..} = do
 >       let heat_scaled = max 1 (2000 / temp)
+>       let fuel_scaled = max 1 (4000 / temp)
 >       let redness = round $ 255 / heat_scaled
 >       Canvas.fill (Canvas.red redness)
->       Canvas.circle (fmap ((*10) . fromIntegral) coords) (10 / heat_scaled)
+>       Canvas.circle (fmap ((*10) . fromIntegral) coords) (1 + 9 / fuel_scaled)
