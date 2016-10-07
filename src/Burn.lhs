@@ -210,7 +210,7 @@ texture within SDL. Get a window and show it.
 
 Get a renderer to put our texture on.
 
->     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer  { SDL.rendererType = SDL.SoftwareRenderer }
+>     renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
 
 Associate our Cairo texture with the renderer.
 
@@ -226,7 +226,7 @@ A rendering loop like any other rendering loop. Clear the buffer.
 
 Draw on the buffer.
 
->         Canvas.withCanvas texture $ do
+>         Canvas.withCanvas texture $
 >           mapM_ (uncurry drawPixel) frame
 
 Swap the buffers.
