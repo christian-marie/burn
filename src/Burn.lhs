@@ -241,7 +241,7 @@ We represent each pixel by a circle, bigger and redder circles are hotter.
 >     drawPixel :: V2 Int -> PixelState -> Canvas ()
 >     drawPixel coords PixelState{..} = do
 >       let heat_scaled = max 1 (2000 / temp)
->       let fuel_scaled = max 1 (4000 / temp)
+>       let fuel_scaled = max 1 (4000 / fuel)
 >       let redness = round $ 255 / heat_scaled
 >       Canvas.fill (Canvas.red redness)
 >       Canvas.circle (fmap ((*10) . fromIntegral) coords) (1 + 9 / fuel_scaled)
