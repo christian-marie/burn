@@ -170,11 +170,12 @@ might be cleaner.
 >       memoPair = Memo.pair Memo.integral Memo.integral
 
 Now we define our simulation as parametrised by a store algebra, and an initial
-store. We feed result of successive uniform applications the algebra over the
+store. We feed result of successive applications of the same algebra over the
 entire universe back into itself. simulation alg base !! 10 will retrieve the
-tenth generation. Only this tenth generation store is peeked into will the
+tenth generation. Only when this tenth generation store is peeked into will the
 computation actually take place, when all nine previous generations are
-calculated bottom up.
+calculated bottom up. This is why we want memoisation, to avoid rebuilding this
+layered "cake" each time.
 
 > simulation :: (Store (V2 Int) a -> a) -> Store (V2 Int) a -> [Store (V2 Int) a]
 > simulation f base = iterate (extend f . memoise) base
