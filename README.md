@@ -4,4 +4,4 @@ Wildfire "simulation" with co-state co-monads representing cellular automata
 
 See:
  * [rendered lhs](burn.pdf)
- * [![burn.gif](burn.gif)](burn.mkv)
+ * [Recording (burn.mkv): ![burn.gif](burn.gif)](burn.mkv)
